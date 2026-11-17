@@ -23,7 +23,17 @@ The network is 128 → 32 → 16 → 1. The hidden layers are int8. The ESP32-S3
 
 ## Train
 
-The lab machine is LeonPC, the same RTX 4060 laptop the robot runs train on. This repository's cloud checkout has no GPU, so the CUDA run belongs on LeonPC.
+GPU training runs as one Slurm job on the CBU compute lab (`jduran`, files in `/lab/home/jduran`). The lab WireGuard tunnel has to be up on the laptop first. Its private key stays on that laptop. The login command is `ssh -p 2222 jduran@10.77.0.1`, and the server fingerprint must be `SHA256:w3zDp2wg5VOp6Y8Z/yCv6LflPLi+cnkMTJqbJfvh5A8`.
+
+From the laptop, in this repo:
+
+```bash
+bash lab/submit.sh --wait
+```
+
+That copies the project to `/lab/home/jduran/spoofdet`, submits `lab/train.sbatch` (one GPU, one hour), and copies `results/` and `firmware/src/model_weights.h` back when the job ends. Without `--wait` it only submits. Watch the queue with `ssh -p 2222 jduran@10.77.0.1 squeue --me`.
+
+The job trains with `--device cuda --scenes 8000 --epochs 20 --eval-tracks 120`. A machine that already has CUDA can run the same command directly:
 
 ```bash
 python3 -m venv .venv
@@ -31,7 +41,7 @@ python3 -m venv .venv
 .venv/bin/python -m spoofdet train --device cuda --scenes 8000 --epochs 20 --eval-tracks 120
 ```
 
-`--device auto` uses CUDA when it is visible and CPU otherwise. The run writes `results/` (`config.json`, `history.csv`, `eval.json`, `model.pt`, `quant.npz`) and `firmware/src/model_weights.h`.
+`--device auto` uses CUDA when it is visible and CPU otherwise. The run writes `results/` (`config.json`, `history.csv`, `eval.json`, `model.pt`, `quant.npz`) and `firmware/src/model_weights.h`. The weights currently checked in are a CPU baseline (`results/config.json` says `"device": "cpu"`). The lab job replaces them.
 
 A labeled capture can be mixed in. Each line is one fix and needs `label` 0 or 1 plus a `track` id. Totem-air's local JSONL shape (`t`, `mac`, `rssi`, `lat`, `lon`, `decoded`, …) is accepted.
 
