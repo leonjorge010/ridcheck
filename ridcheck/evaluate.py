@@ -1,7 +1,7 @@
 """Score a fresh simulated set with the exported int8 model.
 
-    python -m spoofdet evaluate
-    python -m spoofdet evaluate --quant results/quant.npz --seed 77
+    python -m ridcheck evaluate
+    python -m ridcheck evaluate --quant results/quant.npz --seed 77
 """
 
 from __future__ import annotations
@@ -11,9 +11,9 @@ from pathlib import Path
 
 import numpy as np
 
-from spoofdet.export import load_quant
-from spoofdet.metrics import format_summary, summarize, threshold_at_fpr
-from spoofdet.sim import REAL_SLICES, make_eval_set
+from ridcheck.export import load_quant
+from ridcheck.metrics import format_summary, summarize, threshold_at_fpr
+from ridcheck.sim import REAL_SLICES, make_eval_set
 
 ROOT = Path(__file__).resolve().parents[1]
 

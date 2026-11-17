@@ -8,7 +8,7 @@ Each line is one location fix. Two shapes are accepted:
 - A Totem-air local record (`t`, `mac`, `rssi`, `lat`, `lon`, `alt`, `speed`,
   `hdg`, `node_lat`, `node_lon`, `decoded`). Rows without a fix are skipped.
 
-    python -m spoofdet replay examples/sample_scene.jsonl
+    python -m ridcheck replay examples/sample_scene.jsonl
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ from pathlib import Path
 
 import numpy as np
 
-from spoofdet.export import load_quant
-from spoofdet.features import TrackArrays, addr_local_feature, windows_from_track
+from ridcheck.export import load_quant
+from ridcheck.features import TrackArrays, addr_local_feature, windows_from_track
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -136,7 +136,7 @@ def load_jsonl(path: Path) -> list[dict]:
 
 def windows_from_jsonl(path: Path):
     """Labeled windows from a JSONL capture. Every track needs label 0 or 1."""
-    from spoofdet.sim import tracks_to_windows
+    from ridcheck.sim import tracks_to_windows
 
     tracks = rows_to_tracks(load_jsonl(path))
     unlabeled = [track.slice_name for track in tracks if track.label < 0]

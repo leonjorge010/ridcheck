@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from spoofdet.sim import PHYSICS_SLICES, REAL_SLICES, SPOOF_SLICES
+from ridcheck.sim import PHYSICS_SLICES, REAL_SLICES, SPOOF_SLICES
 
 
 def auroc(labels: np.ndarray, scores: np.ndarray) -> float:

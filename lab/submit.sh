@@ -12,7 +12,7 @@ LAB_USER=${LAB_USER:-jduran}
 LAB_HOST=${LAB_HOST:-10.77.0.1}
 LAB_PORT=${LAB_PORT:-2222}
 LAB_IDENTITY=${LAB_IDENTITY:-$HOME/.ssh/cbu_lab}
-REMOTE=${REMOTE:-/lab/home/jduran/spoofdet}
+REMOTE=${REMOTE:-/lab/home/jduran/ridcheck}
 EXPECT_FP=${EXPECT_FP:-SHA256:w3zDp2wg5VOp6Y8Z/yCv6LflPLi+cnkMTJqbJfvh5A8}
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -78,5 +78,5 @@ if [[ "$WAIT" -eq 1 ]]; then
   rsync -az -e "$rsync_ssh" \
     "${target}:${REMOTE}/firmware/src/model_weights.h" "${ROOT}/firmware/src/model_weights.h"
   echo "copied results/ and firmware/src/model_weights.h back"
-  "${ssh_base[@]}" "$target" "tail -n 40 ${REMOTE}/logs/spoofdet-${job}.out"
+  "${ssh_base[@]}" "$target" "tail -n 40 ${REMOTE}/logs/ridcheck-${job}.out"
 fi

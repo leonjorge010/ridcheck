@@ -3,9 +3,9 @@
 import numpy as np
 import torch
 
-from spoofdet.metrics import auroc
-from spoofdet.model import SpoofNet
-from spoofdet.sim import generate_tracks, tracks_to_windows
+from ridcheck.metrics import auroc
+from ridcheck.model import SpoofNet
+from ridcheck.sim import generate_tracks, tracks_to_windows
 
 
 def test_short_train_separates_teleports_from_real_tracks():

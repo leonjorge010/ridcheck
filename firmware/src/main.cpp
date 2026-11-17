@@ -16,7 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "spoofdet_infer.h"
+#include "ridcheck_infer.h"
 
 static void score_line(char *line) {
     if (strcmp(line, "SELFTEST") == 0) {
@@ -51,7 +51,7 @@ void setup() {
     Serial.begin(115200);
     delay(200);
     int failed = sd_selftest();
-    Serial.printf("spoofdet selftest %s\n", failed ? "FAIL" : "ok");
+    Serial.printf("ridcheck selftest %s\n", failed ? "FAIL" : "ok");
 }
 
 void loop() {

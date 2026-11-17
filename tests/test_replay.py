@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-from spoofdet.replay import score_file
-from spoofdet.sim import generate_tracks
+from ridcheck.replay import score_file
+from ridcheck.sim import generate_tracks
 
 ROOT = Path(__file__).resolve().parents[1]
 

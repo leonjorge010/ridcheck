@@ -7,12 +7,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_c_selftest_matches_python_export():
-    binary = Path("/tmp/spoofdet_parity")
+    binary = Path("/tmp/ridcheck_parity")
     source = [
         "gcc", "-O2", "-std=c11", "-Wall", "-Wextra", "-Werror",
         "-o", str(binary),
         str(ROOT / "tests" / "parity_main.c"),
-        str(ROOT / "firmware" / "src" / "spoofdet_infer.c"),
+        str(ROOT / "firmware" / "src" / "ridcheck_infer.c"),
         "-lm",
     ]
     compiled = subprocess.run(source, cwd=ROOT, capture_output=True, text=True)

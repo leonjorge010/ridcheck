@@ -1,17 +1,17 @@
 #!/bin/bash
 # One GPU on the CBU compute lab. The queue allows one GPU per job.
 # The 5090s are Blackwell, so an older CUDA 12.4 wheel is not enough.
-#SBATCH --job-name=spoofdet
+#SBATCH --job-name=ridcheck
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
 #SBATCH --time=01:00:00
-#SBATCH --output=/lab/home/jduran/spoofdet/logs/%x-%j.out
-#SBATCH --error=/lab/home/jduran/spoofdet/logs/%x-%j.err
+#SBATCH --output=/lab/home/jduran/ridcheck/logs/%x-%j.out
+#SBATCH --error=/lab/home/jduran/ridcheck/logs/%x-%j.err
 
 set -euo pipefail
 
-cd /lab/home/jduran/spoofdet
+cd /lab/home/jduran/ridcheck
 mkdir -p logs
 
 echo "host $(hostname)  arch $(uname -m)  date $(date -Is)"
@@ -58,7 +58,7 @@ if [[ ! -x .venv/bin/python ]] || ! cuda_ok; then
   fi
 fi
 
-.venv/bin/python -m spoofdet train \
+.venv/bin/python -m ridcheck train \
   --device cuda \
   --scenes 8000 \
   --epochs 20 \

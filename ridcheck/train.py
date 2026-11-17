@@ -1,7 +1,7 @@
 """Train the spoof detector and export the int8 weights.
 
-    python -m spoofdet train
-    python -m spoofdet train --device cuda --scenes 4000 --epochs 16
+    python -m ridcheck train
+    python -m ridcheck train --device cuda --scenes 4000 --epochs 16
 
 Writes results/ (or --out): config.json, history.csv, model.pt, quant.npz,
 and firmware/src/model_weights.h. Scratch runs can use --out runs/<name>.
@@ -18,13 +18,13 @@ import numpy as np
 import torch
 from torch import nn
 
-from spoofdet.export import save_quant, write_header
-from spoofdet.features import FEATURE_NAMES, N_FEATURES, WINDOW
-from spoofdet.metrics import format_summary, summarize, threshold_at_fpr
-from spoofdet.model import SpoofNet
-from spoofdet.quantize import feature_scales, quantize_network
-from spoofdet.replay import windows_from_jsonl
-from spoofdet.sim import REAL_SLICES, make_dataset, make_eval_set, training_counts
+from ridcheck.export import save_quant, write_header
+from ridcheck.features import FEATURE_NAMES, N_FEATURES, WINDOW
+from ridcheck.metrics import format_summary, summarize, threshold_at_fpr
+from ridcheck.model import SpoofNet
+from ridcheck.quantize import feature_scales, quantize_network
+from ridcheck.replay import windows_from_jsonl
+from ridcheck.sim import REAL_SLICES, make_dataset, make_eval_set, training_counts
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = ROOT / "results"

@@ -1,9 +1,9 @@
 /* Integer inference for the spoofed-Remote-ID detector.
- * The weights live in model_weights.h, written by `python -m spoofdet train`.
+ * The weights live in model_weights.h, written by `python -m ridcheck train`.
  * Hidden layers are int8. The last accumulator is a float logit.
  */
 
-#include "spoofdet_infer.h"
+#include "ridcheck_infer.h"
 
 #include "model_weights.h"
 

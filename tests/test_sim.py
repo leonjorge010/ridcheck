@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from spoofdet.features import N_FEATURES, WINDOW, haversine_m, step_features, windows_from_track
-from spoofdet.sim import generate_tracks
+from ridcheck.features import N_FEATURES, WINDOW, haversine_m, step_features, windows_from_track
+from ridcheck.sim import generate_tracks
 
 
 def _mean_column(tracks, index):

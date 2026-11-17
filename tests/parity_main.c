@@ -1,4 +1,4 @@
-#include "../firmware/src/spoofdet_infer.h"
+#include "../firmware/src/ridcheck_infer.h"
 
 #include <stdio.h>
 

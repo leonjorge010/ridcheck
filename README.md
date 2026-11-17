@@ -1,4 +1,4 @@
-# Spoofed Remote ID detector
+# Ridcheck
 
 A small classifier that scores a Remote ID track as a real aircraft or a false one, then runs that score on the ESP32-S3 board. Totem-air is the receiver: it already stores RSSI, the aircraft fix, speed, heading, the operator fix, and the node's own GNSS fix. Project Ghost is the lab source of false tracks, one radio claiming many aircraft. This project trains on those receiver-side patterns and exports integer weights for the board.
 
@@ -31,14 +31,14 @@ From the laptop, in this repo:
 bash lab/submit.sh --wait
 ```
 
-That copies the project to `/lab/home/jduran/spoofdet`, submits `lab/train.sbatch` (one GPU, one hour), and copies `results/` and `firmware/src/model_weights.h` back when the job ends. Without `--wait` it only submits. Watch the queue with `ssh -p 2222 jduran@10.77.0.1 squeue --me`.
+That copies the project to `/lab/home/jduran/ridcheck`, submits `lab/train.sbatch` (one GPU, one hour), and copies `results/` and `firmware/src/model_weights.h` back when the job ends. Without `--wait` it only submits. Watch the queue with `ssh -p 2222 jduran@10.77.0.1 squeue --me`.
 
 The job trains with `--device cuda --scenes 8000 --epochs 20 --eval-tracks 120`. A machine that already has CUDA can run the same command directly:
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cu124
-.venv/bin/python -m spoofdet train --device cuda --scenes 8000 --epochs 20 --eval-tracks 120
+.venv/bin/python -m ridcheck train --device cuda --scenes 8000 --epochs 20 --eval-tracks 120
 ```
 
 `--device auto` uses CUDA when it is visible and CPU otherwise. The run writes `results/` (`config.json`, `history.csv`, `eval.json`, `model.pt`, `quant.npz`) and `firmware/src/model_weights.h`. The weights currently checked in are a CPU baseline (`results/config.json` says `"device": "cpu"`). The lab job replaces them.
@@ -46,14 +46,14 @@ python3 -m venv .venv
 A labeled capture can be mixed in. Each line is one fix and needs `label` 0 or 1 plus a `track` id. Totem-air's local JSONL shape (`t`, `mac`, `rssi`, `lat`, `lon`, `decoded`, …) is accepted.
 
 ```bash
-.venv/bin/python -m spoofdet train --device cuda --captures captures.jsonl
+.venv/bin/python -m ridcheck train --device cuda --captures captures.jsonl
 ```
 
 Score a capture with the shipped int8 weights:
 
 ```bash
-.venv/bin/python -m spoofdet replay examples/sample_scene.jsonl
-.venv/bin/python -m spoofdet evaluate --seed 77
+.venv/bin/python -m ridcheck replay examples/sample_scene.jsonl
+.venv/bin/python -m ridcheck evaluate --seed 77
 ```
 
 ## Held-out result

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from spoofdet.features import N_FEATURES, WINDOW
+from ridcheck.features import N_FEATURES, WINDOW
 
 Q_SHIFT = 16
 

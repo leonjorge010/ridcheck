@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from spoofdet.features import (
+from ridcheck.features import (
     N_FEATURES,
     TrackArrays,
     expected_rssi,
