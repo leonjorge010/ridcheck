@@ -1,0 +1,223 @@
+"""Train the spoof detector and export the int8 weights.
+
+    python -m spoofdet train
+    python -m spoofdet train --device cuda --scenes 4000 --epochs 16
+
+Writes results/ (or --out): config.json, history.csv, model.pt, quant.npz,
+and firmware/src/model_weights.h. Scratch runs can use --out runs/<name>.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+from pathlib import Path
+
+import numpy as np
+import torch
+from torch import nn
+
+from spoofdet.export import save_quant, write_header
+from spoofdet.features import FEATURE_NAMES, N_FEATURES, WINDOW
+from spoofdet.metrics import format_summary, summarize, threshold_at_fpr
+from spoofdet.model import SpoofNet
+from spoofdet.quantize import feature_scales, quantize_network
+from spoofdet.replay import windows_from_jsonl
+from spoofdet.sim import REAL_SLICES, make_dataset, make_eval_set, training_counts
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_OUT = ROOT / "results"
+HEADER_PATH = ROOT / "firmware" / "src" / "model_weights.h"
+
+
+def resolve_device(name: str) -> torch.device:
+    if name == "auto":
+        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if name == "cuda" and not torch.cuda.is_available():
+        raise SystemExit("CUDA was requested, but this machine has no visible GPU")
+    return torch.device(name)
+
+
+def _loader(features, labels, batch: int, shuffle: bool):
+    tensor_x = torch.from_numpy(np.ascontiguousarray(features))
+    tensor_y = torch.from_numpy(np.ascontiguousarray(labels.astype(np.float32)))
+    dataset = torch.utils.data.TensorDataset(tensor_x, tensor_y)
+    return torch.utils.data.DataLoader(dataset, batch_size=batch, shuffle=shuffle)
+
+
+def _predict(model, features, device) -> np.ndarray:
+    model.eval()
+    scores = []
+    with torch.no_grad():
+        for start in range(0, len(features), 1024):
+            batch = torch.from_numpy(features[start : start + 1024]).to(device)
+            logit = model(batch)
+            scores.append(torch.sigmoid(logit).cpu().numpy())
+    return np.concatenate(scores) if scores else np.zeros((0,), dtype=np.float64)
+
+
+def _selftest_pack(quant, features, count: int = 6):
+    chosen = features[:count]
+    if len(chosen) < count:
+        pad = np.zeros((count - len(chosen), WINDOW, N_FEATURES), dtype=np.float32)
+        chosen = np.concatenate([chosen, pad])
+    quantized = quant.quantize_features(chosen)
+    prob, acc = quant.forward_acc(quantized)
+    return {
+        "features": chosen.reshape(count, -1).astype(np.float32),
+        "quantized": quantized.reshape(count, -1).astype(np.int8),
+        "acc": acc.astype(np.int32),
+        "prob": prob.astype(np.float64),
+    }
+
+
+def train(
+    scenes: int,
+    epochs: int,
+    batch: int,
+    lr: float,
+    seed: int,
+    device: torch.device,
+    out: Path,
+    eval_tracks: int,
+    captures: Path | None,
+) -> dict:
+    out.mkdir(parents=True, exist_ok=True)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    counts = training_counts(scenes)
+    features, labels, slices = make_dataset(counts, seed)
+    if captures is not None:
+        cap_x, cap_y, cap_s = windows_from_jsonl(captures)
+        features = np.concatenate([features, cap_x])
+        labels = np.concatenate([labels, cap_y])
+        slices = np.concatenate([slices, cap_s])
+    eval_x, eval_y, eval_slices = make_eval_set(eval_tracks, seed + 10007)
+    model = SpoofNet().to(device)
+    opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    loss_fn = nn.BCEWithLogitsLoss()
+    loader = _loader(features, labels, batch, shuffle=True)
+    history = []
+    best_state = None
+    best_score = -1.0
+
+    for epoch in range(1, epochs + 1):
+        model.train()
+        total = 0.0
+        seen = 0
+        for batch_x, batch_y in loader:
+            batch_x = batch_x.to(device)
+            batch_y = batch_y.to(device)
+            opt.zero_grad(set_to_none=True)
+            logit = model(batch_x)
+            loss = loss_fn(logit, batch_y)
+            loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            opt.step()
+            total += float(loss.item()) * len(batch_x)
+            seen += len(batch_x)
+        scores = _predict(model, eval_x, device)
+        real_scores = scores[np.isin(eval_slices, REAL_SLICES)]
+        threshold = threshold_at_fpr(real_scores, 0.01)
+        summary = summarize(eval_y, scores, eval_slices, threshold)
+        row = {
+            "epoch": epoch,
+            "loss": total / max(seen, 1),
+            "auroc": summary["auroc"],
+            "real_fpr": summary["real_fpr"],
+            "physics_recall": summary["physics_recall"],
+            "threshold": threshold,
+        }
+        history.append(row)
+        print(
+            f"epoch {epoch:02d}  loss {row['loss']:.4f}  AUROC {row['auroc']:.3f}  "
+            f"FPR {row['real_fpr']:.1%}  physics recall {row['physics_recall']:.1%}",
+            flush=True,
+        )
+        if row["physics_recall"] > best_score:
+            best_score = row["physics_recall"]
+            best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+
+    model.load_state_dict(best_state)
+    float_scores = _predict(model, eval_x, device)
+    real_scores = float_scores[np.isin(eval_slices, REAL_SLICES)]
+    threshold = threshold_at_fpr(real_scores, 0.01)
+    scales = feature_scales(features)
+    quant = quantize_network(best_state, scales, features[: min(len(features), 2048)])
+    quant.threshold = threshold
+    int8_scores = quant.score(eval_x)
+    # Keep the operating point on the weights that actually ship.
+    threshold = threshold_at_fpr(int8_scores[np.isin(eval_slices, REAL_SLICES)], 0.01)
+    quant.threshold = threshold
+    float_summary = summarize(eval_y, float_scores, eval_slices, threshold_at_fpr(real_scores, 0.01))
+    int8_summary = summarize(eval_y, int8_scores, eval_slices, threshold)
+    print(format_summary(float_summary, "float32 held-out"))
+    print(format_summary(int8_summary, "int8 held-out (what the ESP32 runs)"))
+
+    torch.save({"state_dict": best_state, "hidden": model.hidden}, out / "model.pt")
+    save_quant(quant, out / "quant.npz")
+    write_header(quant, _selftest_pack(quant, eval_x), HEADER_PATH)
+    config = {
+        "seed": seed,
+        "scenes": scenes,
+        "epochs": epochs,
+        "batch": batch,
+        "lr": lr,
+        "device": str(device),
+        "gpu": torch.cuda.get_device_name(0) if device.type == "cuda" else None,
+        "counts": counts,
+        "eval_tracks": eval_tracks,
+        "captures": str(captures) if captures else None,
+        "window": WINDOW,
+        "features": list(FEATURE_NAMES),
+        "hidden": list(model.hidden),
+        "threshold_fpr1": threshold,
+        "int8_auroc": int8_summary["auroc"],
+        "int8_physics_recall": int8_summary["physics_recall"],
+        "int8_real_fpr": int8_summary["real_fpr"],
+    }
+    (out / "config.json").write_text(json.dumps(config, indent=2) + "\n")
+    (out / "eval.json").write_text(json.dumps({
+        "float32": float_summary,
+        "int8": int8_summary,
+    }, indent=2) + "\n")
+    with (out / "history.csv").open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(history[0].keys()))
+        writer.writeheader()
+        writer.writerows(history)
+    print(f"wrote {out} and {HEADER_PATH}")
+    return {"config": config, "int8": int8_summary, "float32": float_summary}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--scenes", type=int, default=2400, help="training-track budget")
+    parser.add_argument("--epochs", type=int, default=12)
+    parser.add_argument("--batch", type=int, default=256)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--eval-tracks", type=int, default=80, help="held-out tracks per slice")
+    parser.add_argument("--captures", type=Path, default=None,
+                        help="JSONL of labeled fixes to mix into the simulator set")
+    parser.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
+    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    args = parser.parse_args()
+    device = resolve_device(args.device)
+    gpu = torch.cuda.get_device_name(0) if device.type == "cuda" else None
+    print(f"training on {device}" + (f" ({gpu})" if gpu else ""), flush=True)
+    train(
+        scenes=args.scenes,
+        epochs=args.epochs,
+        batch=args.batch,
+        lr=args.lr,
+        seed=args.seed,
+        device=device,
+        out=args.out,
+        eval_tracks=args.eval_tracks,
+        captures=args.captures,
+    )
+
+
+if __name__ == "__main__":
+    main()

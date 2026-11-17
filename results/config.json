@@ -1,0 +1,46 @@
+{
+  "seed": 0,
+  "scenes": 2400,
+  "epochs": 12,
+  "batch": 256,
+  "lr": 0.001,
+  "device": "cpu",
+  "counts": {
+    "real": 640,
+    "real_pair": 320,
+    "spoof_teleport": 240,
+    "spoof_drift": 240,
+    "spoof_waypoint_far": 240,
+    "spoof_colocated": 240,
+    "spoof_swarm": 240,
+    "spoof_universal_mac": 240
+  },
+  "eval_tracks": 80,
+  "window": 8,
+  "features": [
+    "rssi_norm",
+    "log_claimed_range",
+    "rssi_residual",
+    "speed_reported",
+    "speed_track",
+    "speed_residual",
+    "heading_error",
+    "vspeed_residual",
+    "step_ratio",
+    "alt_gap_rate",
+    "dt_center",
+    "clock_skew",
+    "log_operator_range",
+    "addr_local",
+    "cohort_log",
+    "node_speed"
+  ],
+  "hidden": [
+    32,
+    16
+  ],
+  "threshold_fpr1": 0.5381425888148765,
+  "int8_auroc": 0.974903125,
+  "int8_physics_recall": 0.9965,
+  "int8_real_fpr": 0.01
+}

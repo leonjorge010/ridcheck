@@ -1,0 +1,130 @@
+{
+  "float32": {
+    "threshold": 0.5380398631095886,
+    "auroc": 0.9749036458333333,
+    "real_fpr": 0.01,
+    "physics_recall": 0.9965,
+    "slices": [
+      {
+        "slice": "real",
+        "n": 400,
+        "kind": "fpr",
+        "rate": 0.015,
+        "mean_score": 0.1346995201046377
+      },
+      {
+        "slice": "real_pair",
+        "n": 400,
+        "kind": "fpr",
+        "rate": 0.005,
+        "mean_score": 0.12802571828579176
+      },
+      {
+        "slice": "spoof_teleport",
+        "n": 400,
+        "kind": "recall",
+        "rate": 1.0,
+        "mean_score": 1.0
+      },
+      {
+        "slice": "spoof_drift",
+        "n": 400,
+        "kind": "recall",
+        "rate": 1.0,
+        "mean_score": 0.995404048115015
+      },
+      {
+        "slice": "spoof_waypoint_far",
+        "n": 400,
+        "kind": "recall",
+        "rate": 1.0,
+        "mean_score": 0.9999833814799786
+      },
+      {
+        "slice": "spoof_colocated",
+        "n": 400,
+        "kind": "recall",
+        "rate": 0.0225,
+        "mean_score": 0.3774247892200947
+      },
+      {
+        "slice": "spoof_swarm",
+        "n": 400,
+        "kind": "recall",
+        "rate": 1.0,
+        "mean_score": 0.9997363382577896
+      },
+      {
+        "slice": "spoof_universal_mac",
+        "n": 400,
+        "kind": "recall",
+        "rate": 0.9825,
+        "mean_score": 0.9706083915382624
+      }
+    ]
+  },
+  "int8": {
+    "threshold": 0.5381425888148765,
+    "auroc": 0.974903125,
+    "real_fpr": 0.01,
+    "physics_recall": 0.9965,
+    "slices": [
+      {
+        "slice": "real",
+        "n": 400,
+        "kind": "fpr",
+        "rate": 0.015,
+        "mean_score": 0.13491186978884784
+      },
+      {
+        "slice": "real_pair",
+        "n": 400,
+        "kind": "fpr",
+        "rate": 0.005,
+        "mean_score": 0.12781361179279624
+      },
+      {
+        "slice": "spoof_teleport",
+        "n": 400,
+        "kind": "recall",
+        "rate": 1.0,
+        "mean_score": 0.9980622160181567
+      },
+      {
+        "slice": "spoof_drift",
+        "n": 400,
+        "kind": "recall",
+        "rate": 1.0,
+        "mean_score": 0.9938667073119615
+      },
+      {
+        "slice": "spoof_waypoint_far",
+        "n": 400,
+        "kind": "recall",
+        "rate": 1.0,
+        "mean_score": 0.9980665184402895
+      },
+      {
+        "slice": "spoof_colocated",
+        "n": 400,
+        "kind": "recall",
+        "rate": 0.0225,
+        "mean_score": 0.376865240599999
+      },
+      {
+        "slice": "spoof_swarm",
+        "n": 400,
+        "kind": "recall",
+        "rate": 1.0,
+        "mean_score": 0.9979209827993023
+      },
+      {
+        "slice": "spoof_universal_mac",
+        "n": 400,
+        "kind": "recall",
+        "rate": 0.9825,
+        "mean_score": 0.9703032953697153
+      }
+    ]
+  }
+}
