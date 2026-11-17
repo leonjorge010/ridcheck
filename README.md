@@ -23,7 +23,7 @@ The network is 128 → 32 → 16 → 1. The hidden layers are int8. The ESP32-S3
 
 ## Train
 
-GPU training runs as one Slurm job on the CBU compute lab (`jduran`, files in `/lab/home/jduran`). The lab WireGuard tunnel has to be up on the laptop first. Its private key stays on that laptop. The login command is `ssh -p 2222 jduran@10.77.0.1`, and the server fingerprint must be `SHA256:w3zDp2wg5VOp6Y8Z/yCv6LflPLi+cnkMTJqbJfvh5A8`. The lab accepts SSH keys only. Generate one on the laptop if `~\.ssh\id_ed25519.pub` is missing, open `http://10.77.0.1` with the tunnel on, and register that public key before the first login.
+GPU training runs as one Slurm job on the CBU compute lab (`jduran`, files in `/lab/home/jduran`). The lab WireGuard tunnel has to be up on the laptop first. Its private key stays on that laptop. The login key is `~/.ssh/cbu_lab`, the one the portal already has on file (`SHA256:F8NzmBex7nSO59hI9UKpqfKeoXHCPy6TOlc9+xMnSqI`). `ssh -p 2222 jduran@10.77.0.1` offers the default key and is refused. Use `ssh -i ~/.ssh/cbu_lab -o IdentitiesOnly=yes -p 2222 jduran@10.77.0.1`, and confirm the server fingerprint `SHA256:w3zDp2wg5VOp6Y8Z/yCv6LflPLi+cnkMTJqbJfvh5A8`.
 
 From the laptop, in this repo:
 
