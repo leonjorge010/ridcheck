@@ -17,7 +17,7 @@ float sd_score_i8(const int8_t *quantized, int32_t *last_acc);
 /* Quantize and score. */
 float sd_score(const float *features);
 
-/* "spoof" or "real" at the shipped false-positive threshold. */
+/* "spoof" above the 1% cut, "watch" above the 5% cut, otherwise "real". */
 const char *sd_verdict(float probability);
 
 /* Returns the number of failing vectors. Zero means the weights match the host. */

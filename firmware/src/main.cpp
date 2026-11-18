@@ -1,9 +1,10 @@
 /* Remote ID scorer for a generic ESP32-S3 dev board (ESP32-S3-DevKitC-1).
 
-   One line in, one line out. The line is 128 comma-separated floats: 8 location
-   fixes, oldest first, 16 features each, in the order documented in
-   model_weights.h. The sketch prints the score and shows it on the onboard
-   RGB LED: solid for a real track, blinking for a false one, off until the
+   One line in, one line out. The line is SD_INPUTS comma-separated floats:
+   8 location fixes, oldest first, one feature group per fix, in the order
+   documented in model_weights.h. The sketch prints the score and shows it on
+   the onboard RGB LED. Solid means real. A slow blink means the score is in
+   the watch band. A fast blink means false. The LED stays off until the
    first score.
 
    DevKitC-1 v1.1 wires that LED to GPIO48. Older v1.0 boards use GPIO38;
@@ -33,8 +34,9 @@
 static const int kUserLed = RIDCHECK_LED_PIN;
 static const uint8_t kLedLevel = 48;
 static const uint32_t kBlinkMs = 250;
+static const uint32_t kWatchMs = 900;
 
-enum Lamp : uint8_t { kLampOff, kLampSolid, kLampBlink };
+enum Lamp : uint8_t { kLampOff, kLampSolid, kLampWatch, kLampBlink };
 
 static Lamp lamp = kLampOff;
 static bool led_on = false;
@@ -54,12 +56,20 @@ static void paint_led() {
         on = true;
     } else if (lamp == kLampBlink) {
         on = ((millis() / kBlinkMs) & 1u) == 0u;
+    } else if (lamp == kLampWatch) {
+        on = ((millis() / kWatchMs) & 1u) == 0u;
     }
     write_led(on);
 }
 
 static void show_verdict(float probability) {
-    lamp = probability >= SD_THRESHOLD ? kLampBlink : kLampSolid;
+    if (probability >= SD_THRESHOLD) {
+        lamp = kLampBlink;
+    } else if (probability >= SD_WATCH) {
+        lamp = kLampWatch;
+    } else {
+        lamp = kLampSolid;
+    }
     paint_led();
 }
 

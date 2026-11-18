@@ -6,7 +6,7 @@ The training loop matches the CBU robot: a fast simulator stands in for the slow
 
 ## What a window contains
 
-Eight location fixes, oldest first, sixteen numbers each. On the Pi those numbers come from a Totem-air detection record. The ESP32-S3 dev board does not carry its own GNSS or IMU; a host sends the finished window over USB and the board shows the verdict.
+Eight location fixes, oldest first, seventeen numbers each. On the Pi those numbers come from a Totem-air detection record. Nodes scattered around the area each hear the same claim at their own loudness. The ESP32-S3 dev board does not carry its own GNSS or IMU; a host sends the finished window over USB and the board shows the verdict.
 
 | Feature | Where it comes from |
 |---|---|
@@ -18,6 +18,7 @@ Eight location fixes, oldest first, sixteen numbers each. On the Pi those number
 | `addr_local` | Locally administered Wi-Fi address, or a BLE static-random address |
 | `cohort_log` | Other tracks within 3 dB in the same second |
 | `node_speed` | How fast the receiver itself is moving; 0 when it is still |
+| `net_residual` | How far one transmit power is from explaining the claim at every scattered node. Zero when only one node heard the track |
 
 The network is 128 → 32 → 16 → 1. The hidden layers are int8. The ESP32-S3 runs that integer net.
 
@@ -74,20 +75,18 @@ Score a capture with the shipped int8 weights:
 
 The weights in `results/` and `firmware/src/model_weights.h` are the int8 model. The threshold is set so about 1% of real windows are called spoof. Full numbers are in `results/eval.json`.
 
-| Slice | What it is | Rate at the 1% threshold |
-|---|---|---|
-| real / real pair | Consistent flight, RSSI matches range | 1.5% / 0.5% false alarms |
-| teleport, drift | Claimed motion does not match the fixes | 100% |
-| waypoint far | Smooth path, power still comes from a nearby radio | 100% |
-| swarm | Several tracks sharing one radio's RSSI | 100% |
-| universal MAC | Drifted track with a burned-in address | 98% |
-| colocated | Slow path sitting on the transmitter, ordinary GNSS noise | 2% |
+| Slice | What it is | At the 1% cut | In the watch band |
+|---|---|---|---|
+| real / real pair | Consistent flight, power matches every node | 1% / 1% false alarms | about 5% |
+| teleport, waypoint far, swarm, universal MAC | Claimed position is not where the radio is | 100% | 100% |
+| drift | Claimed motion does not match the fixes | 95% | 96% |
+| colocated | Slow path sitting on the transmitter | 11% | 42% |
 
-A false aircraft that loiters on top of the transmitter, with a matching pilot fix, scores a bit higher than a real hover and almost never crosses the 1% line. That case needs another sensor or the Remote ID authentication page. The universal-MAC row is there so the motion and the power are doing the work, not the address bit.
+The 1% cut is a fast blink. The watch band is the 5% cut, a slow blink. A transmitter that claims to be exactly where it is sitting still agrees at every node, so most of those stay under the strict cut. Nodes spread a few hundred meters to about a mile apart are what make a claim from anywhere else fail together. One node can always explain a bad position by assuming a louder radio. Four nodes cannot.
 
 ## Firmware
 
-`firmware/` is a PlatformIO sketch for a generic ESP32-S3 dev board, the ESP32-S3-DevKitC-1. On boot it checks six baked windows against the host and leaves the onboard RGB LED off. That LED is the addressable pixel on GPIO48 (GPIO38 on DevKitC-1 v1.0). A scored window holds it on when the track is real and blinks it twice a second when the track is false. The same line still prints `p=0.998 spoof` or `p=0.365 real`. `SELFTEST` runs the check again and leaves the LED as it was.
+`firmware/` is a PlatformIO sketch for a generic ESP32-S3 dev board, the ESP32-S3-DevKitC-1. On boot it checks six baked windows against the host and leaves the onboard RGB LED off. That LED is the addressable pixel on GPIO48 (GPIO38 on DevKitC-1 v1.0). A scored window holds it on when the track is real, blinks it slowly in the watch band, and blinks it twice a second when the track is false. The same line still prints `p=0.998 spoof`, `p=0.760 watch`, or `p=0.210 real`. `SELFTEST` runs the check again and leaves the LED as it was.
 
 ```bash
 cd firmware && pio run -t upload && pio device monitor

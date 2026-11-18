@@ -1,21 +1,23 @@
 {
   "seed": 0,
-  "scenes": 2400,
+  "scenes": 6000,
   "epochs": 12,
   "batch": 256,
   "lr": 0.001,
   "device": "cpu",
+  "gpu": null,
   "counts": {
-    "real": 640,
-    "real_pair": 320,
-    "spoof_teleport": 240,
-    "spoof_drift": 240,
-    "spoof_waypoint_far": 240,
-    "spoof_colocated": 240,
-    "spoof_swarm": 240,
-    "spoof_universal_mac": 240
+    "real": 1371,
+    "real_pair": 686,
+    "spoof_teleport": 514,
+    "spoof_drift": 514,
+    "spoof_waypoint_far": 514,
+    "spoof_colocated": 1371,
+    "spoof_swarm": 514,
+    "spoof_universal_mac": 514
   },
   "eval_tracks": 80,
+  "captures": null,
   "window": 8,
   "features": [
     "rssi_norm",
@@ -33,14 +35,19 @@
     "log_operator_range",
     "addr_local",
     "cohort_log",
-    "node_speed"
+    "node_speed",
+    "net_residual"
   ],
   "hidden": [
     32,
     16
   ],
-  "threshold_fpr1": 0.5381425888148765,
-  "int8_auroc": 0.974903125,
-  "int8_physics_recall": 0.9965,
+  "threshold_fpr1": 0.8000854207450211,
+  "watch_fpr5": 0.730483556950781,
+  "int8_colocated_recall": 0.11,
+  "int8_watch_colocated_recall": 0.4225,
+  "int8_watch_real_fpr": 0.05,
+  "int8_auroc": 0.9826921875,
+  "int8_physics_recall": 0.9905,
   "int8_real_fpr": 0.01
 }

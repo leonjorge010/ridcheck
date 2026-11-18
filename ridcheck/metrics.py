@@ -68,6 +68,8 @@ def summarize(labels, scores, slices, threshold: float) -> dict:
         "auroc": auroc(labels, scores),
         "real_fpr": float(np.mean(scores[real] >= threshold)) if np.any(real) else float("nan"),
         "physics_recall": float(np.mean(scores[physics] >= threshold)) if np.any(physics) else float("nan"),
+        "colocated_recall": float(np.mean(scores[slices == "spoof_colocated"] >= threshold))
+        if np.any(slices == "spoof_colocated") else float("nan"),
         "slices": rows,
     }
 
@@ -76,7 +78,8 @@ def format_summary(summary: dict, title: str) -> str:
     lines = [
         f"{title}",
         f"  threshold {summary['threshold']:.3f}   AUROC {summary['auroc']:.3f}   "
-        f"real FPR {summary['real_fpr']:.1%}   physics recall {summary['physics_recall']:.1%}",
+        f"real FPR {summary['real_fpr']:.1%}   physics recall {summary['physics_recall']:.1%}   "
+        f"colocated recall {summary.get('colocated_recall', float('nan')):.1%}",
         f"  {'slice':<24} {'n':>6} {'rate':>8} {'mean p':>8}",
     ]
     for row in summary["slices"]:

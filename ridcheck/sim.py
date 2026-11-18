@@ -15,6 +15,8 @@ power and the claimed range agree.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 
 from ridcheck.features import (
@@ -22,6 +24,7 @@ from ridcheck.features import (
     TrackArrays,
     expected_rssi,
     haversine_m,
+    network_disagreement,
     windows_from_track,
 )
 
@@ -58,7 +61,7 @@ TRAIN_WEIGHTS = {
     "spoof_teleport": 3,
     "spoof_drift": 3,
     "spoof_waypoint_far": 3,
-    "spoof_colocated": 3,
+    "spoof_colocated": 8,
     "spoof_swarm": 3,
     "spoof_universal_mac": 3,
 }
@@ -143,7 +146,7 @@ def _skew(rng: np.random.Generator, n: int, spread: str) -> np.ndarray:
 def _pack(
     t, rssi, lat, lon, alt, height, speed, vspeed, hdg,
     op_lat, op_lon, node_lat, node_lon, node_speed, clock_skew,
-    addr_local, label, slice_name,
+    addr_local, label, slice_name, emit_lat, emit_lon, net_db=None,
 ) -> TrackArrays:
     n = len(t)
     return TrackArrays(
@@ -166,6 +169,9 @@ def _pack(
         addr_local=float(addr_local),
         label=int(label),
         slice_name=slice_name,
+        emit_lat=np.asarray(emit_lat, dtype=np.float64),
+        emit_lon=np.asarray(emit_lon, dtype=np.float64),
+        net_db=np.zeros(n, dtype=np.float64) if net_db is None else np.asarray(net_db, dtype=np.float64),
     )
 
 
@@ -188,7 +194,7 @@ def _real_loiter(rng, t, node_lat, node_lon, node_speed, slice_name: str):
     return _pack(
         t, rssi, reported_lat, reported_lon, alt, height, speed, vspeed, hdg,
         op_lat, op_lon, node_lat, node_lon, node_speed, _skew(rng, n, "small"),
-        addr, 0, slice_name,
+        addr, 0, slice_name, lat, lon,
     )
 
 
@@ -226,7 +232,7 @@ def _real_track(rng: np.random.Generator, t, node_lat, node_lon, node_speed, sli
     return _pack(
         t, rssi, lat_r, lon_r, alt, height, reported, vspeed, hdg,
         op_lat, op_lon, node_lat, node_lon, node_speed, _skew(rng, n, "small"),
-        addr, 0, slice_name,
+        addr, 0, slice_name, lat, lon,
     )
 
 
@@ -320,6 +326,7 @@ def _loiter_motion(rng, n, t, center_lat, center_lon):
 
 def _spoof_track(
     rng, t, node_lat, node_lon, node_speed, rssi_base, center, radius, kind, slice_name, addr, skew_spread,
+    emit_lat, emit_lon,
 ):
     n = len(t)
     if kind == "loiter":
@@ -340,7 +347,7 @@ def _spoof_track(
     return _pack(
         t, rssi, lat, lon, alt, height, speed, vspeed, hdg,
         op_lat, op_lon, node_lat, node_lon, node_speed, _skew(rng, n, skew_spread),
-        addr, 1, slice_name,
+        addr, 1, slice_name, np.full(n, emit_lat), np.full(n, emit_lon),
     )
 
 
@@ -356,20 +363,72 @@ def _assign_cohort(tracks: list[TrackArrays]) -> None:
             raise RuntimeError("cohort length drifted")
 
 
+def _apply_network(rng: np.random.Generator, tracks: list[TrackArrays]) -> list[TrackArrays]:
+    """Hear every track at four scattered nodes and score the claim against all of them.
+
+    One transmit power is shared by tracks that come from the same radio. The
+    residual is how far the claimed position is from the only place that
+    satisfies every node's loudness.
+    """
+    if not tracks:
+        return []
+    extras = [
+        move_by(
+            DEFAULT_NODE[0], DEFAULT_NODE[1],
+            float(rng.uniform(300.0, 1600.0)), float(rng.uniform(0.0, 360.0)),
+        )
+        for _ in range(3)
+    ]
+    tx_for: dict = {}
+    prepared = []
+    for track in tracks:
+        if track.label == 0:
+            key = id(track)
+        else:
+            key = (round(float(track.emit_lat[0]), 4), round(float(track.emit_lon[0]), 4))
+        tx = tx_for.setdefault(key, _tx_dbm(rng))
+        nodes = [(track.node_lat, track.node_lon)]
+        for lat, lon in extras:
+            nodes.append((np.full(len(track), lat), np.full(len(track), lon)))
+        heard = []
+        for node_lat, node_lon in nodes:
+            distance = haversine_m(node_lat, node_lon, track.emit_lat, track.emit_lon)
+            heard.append((node_lat, node_lon, _rssi_at(distance, tx, rng, len(track), fade=True)))
+        resid = network_disagreement(
+            np.vstack([lat for lat, _, _ in heard]),
+            np.vstack([lon for _, lon, _ in heard]),
+            np.vstack([track.lat for _ in heard]),
+            np.vstack([track.lon for _ in heard]),
+            np.vstack([rssi for _, _, rssi in heard]),
+        )
+        prepared.append((track, heard, resid))
+    expanded = []
+    for track, heard, resid in prepared:
+        for node_lat, node_lon, rssi in heard:
+            expanded.append(replace(
+                track,
+                node_lat=np.asarray(node_lat, dtype=np.float64),
+                node_lon=np.asarray(node_lon, dtype=np.float64),
+                rssi=np.asarray(rssi, dtype=np.float64),
+                net_db=np.asarray(resid, dtype=np.float64),
+            ))
+    return expanded
+
+
 def make_scene(rng: np.random.Generator, kind: str) -> list[TrackArrays]:
     """Build one scene of the requested kind."""
     jitter = 0.045 if kind in ("real", "real_pair", "spoof_colocated") else 0.012
     t = _timebase(rng, N_SAMPLES, jitter)
     node_lat, node_lon, node_speed = _node(rng, t)
     if kind == "real":
-        return [_real_track(rng, t, node_lat, node_lon, node_speed, "real")]
+        return _apply_network(rng, [_real_track(rng, t, node_lat, node_lon, node_speed, "real")])
     if kind == "real_pair":
         tracks = [
             _real_track(rng, t, node_lat, node_lon, node_speed, "real_pair"),
             _real_track(rng, t, node_lat, node_lon, node_speed, "real_pair"),
         ]
         _assign_cohort(tracks)
-        return tracks
+        return _apply_network(rng, tracks)
 
     if kind == "spoof_colocated":
         em_lat, em_lon, rssi_base = _emitter(rng, t, node_lat, node_lon, 15.0, 180.0)
@@ -386,20 +445,21 @@ def make_scene(rng: np.random.Generator, kind: str) -> list[TrackArrays]:
                 rng, t, node_lat, node_lon, node_speed, rssi_base, center,
                 float(rng.uniform(60.0, 180.0)), "circle", kind,
                 1.0 if rng.random() < 0.8 else -1.0, "large" if rng.random() < 0.5 else "small",
+                em_lat, em_lon,
             )
         ]
     elif kind == "spoof_colocated":
         tracks = [
             _spoof_track(
                 rng, t, node_lat, node_lon, node_speed, rssi_base, (em_lat, em_lon),
-                0.0, "loiter", kind, -1.0, "small",
+                0.0, "loiter", kind, -1.0, "small", em_lat, em_lon,
             )
         ]
     elif kind == "spoof_universal_mac":
         tracks = [
             _spoof_track(
                 rng, t, node_lat, node_lon, node_speed, rssi_base, (em_lat, em_lon),
-                0.0, "drift", kind, -1.0, "small",
+                0.0, "drift", kind, -1.0, "small", em_lat, em_lon,
             )
         ]
     elif kind == "spoof_swarm":
@@ -415,7 +475,7 @@ def make_scene(rng: np.random.Generator, kind: str) -> list[TrackArrays]:
     else:
         raise ValueError(f"unknown slice {kind}")
     _assign_cohort(tracks)
-    return tracks
+    return _apply_network(rng, tracks)
 
 
 def _one_spoof(rng, t, node_lat, node_lon, node_speed, rssi_base, em_lat, em_lon, mode, slice_name):
@@ -423,7 +483,7 @@ def _one_spoof(rng, t, node_lat, node_lon, node_speed, rssi_base, em_lat, em_lon
     spread = "large" if rng.random() < 0.5 else "small"
     return _spoof_track(
         rng, t, node_lat, node_lon, node_speed, rssi_base, (em_lat, em_lon),
-        0.0, mode, slice_name, addr, spread,
+        0.0, mode, slice_name, addr, spread, em_lat, em_lon,
     )
 
 

@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from ridcheck.export import load_quant
-from ridcheck.features import TrackArrays, addr_local_feature, windows_from_track
+from ridcheck.features import TrackArrays, addr_local_feature, network_disagreement, windows_from_track
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -58,12 +58,20 @@ def record_usable(record: dict) -> bool:
     return record.get("lat") is not None and record.get("lon") is not None and record.get("t") is not None
 
 
-def track_key(record: dict) -> str:
+def aircraft_key(record: dict) -> str:
     if record.get("track"):
         return str(record["track"])
     mac = record.get("mac", "?")
     uas = record.get("id") or record.get("uas_id") or ""
     return f"{mac}|{uas}"
+
+
+def track_key(record: dict) -> str:
+    node = record.get("node_id")
+    if node is None and record.get("node_lat") is not None and record.get("node_lon") is not None:
+        node = f"{round(float(record['node_lat']), 4)},{round(float(record['node_lon']), 4)}"
+    base = aircraft_key(record)
+    return base if node is None else f"{base}@{node}"
 
 
 def rows_to_tracks(rows: list[dict]) -> list[TrackArrays]:
@@ -119,9 +127,44 @@ def rows_to_tracks(rows: list[dict]) -> list[TrackArrays]:
             cohort=np.array([float(row.get("cohort") or 1) for row in group]),
             addr_local=addr,
             label=label,
-            slice_name=str(group[0].get("slice") or key),
+            slice_name=str(group[0].get("slice") or aircraft_key(group[0])),
+            emit_lat=col("lat"),
+            emit_lon=col("lon"),
+            net_db=np.zeros(len(group), dtype=np.float64),
         ))
+    _attach_network(tracks)
     return tracks
+
+
+def _attach_network(tracks: list[TrackArrays]) -> None:
+    """Fill net_db when the same aircraft was heard at more than one node."""
+    groups: dict[str, list[TrackArrays]] = defaultdict(list)
+    for track in tracks:
+        groups[track.slice_name].append(track)
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        for track in group:
+            rms = np.zeros(len(track), dtype=np.float64)
+            for index, moment in enumerate(track.t):
+                node_lat, node_lon, rssi = [], [], []
+                for other in group:
+                    nearest = int(np.argmin(np.abs(other.t - moment)))
+                    if abs(float(other.t[nearest]) - float(moment)) > 1.5:
+                        continue
+                    node_lat.append(other.node_lat[nearest])
+                    node_lon.append(other.node_lon[nearest])
+                    rssi.append(other.rssi[nearest])
+                if len(rssi) < 2:
+                    continue
+                rms[index] = network_disagreement(
+                    np.array(node_lat)[:, None],
+                    np.array(node_lon)[:, None],
+                    np.full((len(rssi), 1), track.lat[index]),
+                    np.full((len(rssi), 1), track.lon[index]),
+                    np.array(rssi)[:, None],
+                )[0]
+            track.net_db = rms
 
 
 def load_jsonl(path: Path) -> list[dict]:
@@ -160,7 +203,7 @@ def score_file(path: Path, quant_path: Path) -> list[dict]:
             "label": track.label,
             "windows": int(len(windows)),
             "mean_p": mean,
-            "verdict": "spoof" if mean >= model.threshold else "real",
+            "verdict": model.verdict(mean),
         })
     return reports
 

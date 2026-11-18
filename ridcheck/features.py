@@ -13,7 +13,7 @@ import numpy as np
 
 WINDOW = 8
 STRIDE = 4
-N_FEATURES = 16
+N_FEATURES = 17
 FEATURE_CLIP = 4.0
 
 # 2.4 GHz free-space loss at 1 m. RSSI is compared with a 12 dBm reference,
@@ -39,6 +39,7 @@ FEATURE_NAMES = (
     "addr_local",
     "cohort_log",
     "node_speed",
+    "net_residual",
 )
 
 
@@ -65,9 +66,34 @@ class TrackArrays:
     addr_local: float
     label: int
     slice_name: str
+    # Where the radio actually is. Training uses this to place each node's RSSI.
+    emit_lat: np.ndarray
+    emit_lon: np.ndarray
+    # dB rms: one transmit power cannot explain every node's range to the claim.
+    net_db: np.ndarray
 
     def __len__(self) -> int:
         return int(self.t.shape[0])
+
+
+def network_disagreement(node_lat, node_lon, claim_lat, claim_lon, rssi) -> np.ndarray:
+    """dB rms by which one transmit power fails to match the claimed position.
+
+    Each argument is shaped (n_nodes, n_times). A single node fits perfectly,
+    so the result is zero. Scattered nodes agree when the radio is at the claim
+    and disagree when the claim is somewhere else.
+    """
+    node_lat = np.asarray(node_lat, dtype=np.float64)
+    node_lon = np.asarray(node_lon, dtype=np.float64)
+    claim_lat = np.asarray(claim_lat, dtype=np.float64)
+    claim_lon = np.asarray(claim_lon, dtype=np.float64)
+    rssi = np.asarray(rssi, dtype=np.float64)
+    if node_lat.ndim == 1:
+        return np.zeros(node_lat.shape[-1], dtype=np.float64)
+    distance = np.maximum(haversine_m(node_lat, node_lon, claim_lat, claim_lon), 1.0)
+    implied = rssi + (FSPL_1M_DB + 20.0 * np.log10(distance))
+    centered = implied - np.mean(implied, axis=0, keepdims=True)
+    return np.sqrt(np.mean(centered * centered, axis=0))
 
 
 def expected_rssi(range_m, tx_dbm: float = TX_REF_DBM):
@@ -142,6 +168,7 @@ def step_features(track: TrackArrays) -> np.ndarray:
         np.full(dt.shape, float(track.addr_local), dtype=np.float64),
         np.log1p(cohort) / np.log1p(7.0),
         track.node_speed[1:].astype(np.float64) / 2.0,
+        track.net_db[1:].astype(np.float64) / 8.0,
     ]
     features = np.column_stack(columns)
     if features.shape[1] != N_FEATURES:

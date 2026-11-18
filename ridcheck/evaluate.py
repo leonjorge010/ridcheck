@@ -33,7 +33,7 @@ def main():
     summary = summarize(labels, scores, slices, threshold)
     summary["shipped_threshold"] = model.threshold
     print(format_summary(summary, f"int8 eval seed {args.seed}"))
-    print(f"  shipped threshold (from training) {model.threshold:.3f}")
+    print(f"  shipped spoof cut {model.threshold:.3f}   watch cut {model.watch:.3f}")
 
 
 if __name__ == "__main__":

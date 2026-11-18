@@ -92,7 +92,13 @@ float sd_score(const float *features) {
 }
 
 const char *sd_verdict(float probability) {
-    return probability >= SD_THRESHOLD ? "spoof" : "real";
+    if (probability >= SD_THRESHOLD) {
+        return "spoof";
+    }
+    if (probability >= SD_WATCH) {
+        return "watch";
+    }
+    return "real";
 }
 
 int sd_selftest(void) {

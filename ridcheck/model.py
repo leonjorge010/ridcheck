@@ -11,8 +11,9 @@ from ridcheck.features import N_FEATURES, WINDOW
 class SpoofNet(nn.Module):
     """Window of receiver features in, one logit out.
 
-    Input shape is (batch, 8, 16), oldest fix first. The flattened width is
-    128, then 32 and 16 ReLU units. That is a few kilobytes of weights.
+    Input shape is (batch, 8, n_features), oldest fix first. The flattened
+    window goes through two ReLU layers. The integer weights stay a few
+    kilobytes, which is what the ESP32-S3 multiplies.
     """
 
     def __init__(self, hidden: tuple[int, int] = (32, 16)):

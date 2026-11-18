@@ -49,6 +49,7 @@ def render_header(model: QuantModel, selftest: dict) -> str:
         f"#define SD_H1 {layer1.out_features}",
         f"#define SD_H2 {layer2.out_features}",
         f"#define SD_THRESHOLD {model.threshold:.8e}f",
+        f"#define SD_WATCH {model.watch:.8e}f",
         "",
         "/* Feature order, oldest fix first, time-major:",
         " * " + ", ".join(FEATURE_NAMES),
@@ -91,6 +92,7 @@ def save_quant(model: QuantModel, path: Path) -> None:
         path,
         feature_scale=model.feature_scale,
         threshold=np.array([model.threshold], dtype=np.float32),
+        watch=np.array([model.watch], dtype=np.float32),
         w1=layer1.weight, b1=layer1.bias, m1=np.array([layer1.mult], dtype=np.int32),
         w2=layer2.weight, b2=layer2.bias, m2=np.array([layer2.mult], dtype=np.int32),
         w3=layer3.weight, b3=layer3.bias,
@@ -107,4 +109,5 @@ def load_quant(path: Path) -> QuantModel:
         QuantLayer(data["w2"], data["b2"], int(data["m2"][0]), 0.0, True),
         QuantLayer(data["w3"], data["b3"], 0, float(data["scale_acc3"][0]), False),
     ]
-    return Loaded(layers, data["feature_scale"], float(data["threshold"][0]))
+    watch = float(data["watch"][0]) if "watch" in data.files else None
+    return Loaded(layers, data["feature_scale"], float(data["threshold"][0]), watch)

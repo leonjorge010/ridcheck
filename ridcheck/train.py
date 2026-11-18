@@ -26,6 +26,15 @@ from ridcheck.quantize import feature_scales, quantize_network
 from ridcheck.replay import windows_from_jsonl
 from ridcheck.sim import REAL_SLICES, make_dataset, make_eval_set, training_counts
 
+# Easy false tracks already saturate the loss. The colocated hover does not,
+# so its windows pull harder, and real windows pull back so a slow hover
+# stays on the real side of the cut.
+SLICE_LOSS_WEIGHT = {
+    "spoof_colocated": 2.0,
+    "real": 1.5,
+    "real_pair": 1.5,
+}
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = ROOT / "results"
 HEADER_PATH = ROOT / "firmware" / "src" / "model_weights.h"
@@ -39,10 +48,20 @@ def resolve_device(name: str) -> torch.device:
     return torch.device(name)
 
 
-def _loader(features, labels, batch: int, shuffle: bool):
-    tensor_x = torch.from_numpy(np.ascontiguousarray(features))
-    tensor_y = torch.from_numpy(np.ascontiguousarray(labels.astype(np.float32)))
-    dataset = torch.utils.data.TensorDataset(tensor_x, tensor_y)
+def _sample_weights(slices) -> np.ndarray:
+    weights = np.ones(len(slices), dtype=np.float32)
+    for name, weight in SLICE_LOSS_WEIGHT.items():
+        weights[slices == name] = weight
+    return weights
+
+
+def _loader(features, labels, weights, codes, batch: int, shuffle: bool):
+    dataset = torch.utils.data.TensorDataset(
+        torch.from_numpy(np.ascontiguousarray(features)),
+        torch.from_numpy(np.ascontiguousarray(labels.astype(np.float32))),
+        torch.from_numpy(np.ascontiguousarray(weights)),
+        torch.from_numpy(np.ascontiguousarray(codes.astype(np.int64))),
+    )
     return torch.utils.data.DataLoader(dataset, batch_size=batch, shuffle=shuffle)
 
 
@@ -96,8 +115,8 @@ def train(
     eval_x, eval_y, eval_slices = make_eval_set(eval_tracks, seed + 10007)
     model = SpoofNet().to(device)
     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
-    loss_fn = nn.BCEWithLogitsLoss()
-    loader = _loader(features, labels, batch, shuffle=True)
+    loss_fn = nn.BCEWithLogitsLoss(reduction="none")
+    loader = _loader(features, labels, _sample_weights(slices), np.zeros(len(labels), dtype=np.int64), batch, shuffle=True)
     history = []
     best_state = None
     best_score = -1.0
@@ -106,12 +125,13 @@ def train(
         model.train()
         total = 0.0
         seen = 0
-        for batch_x, batch_y in loader:
+        for batch_x, batch_y, batch_w, _batch_code in loader:
             batch_x = batch_x.to(device)
             batch_y = batch_y.to(device)
+            batch_w = batch_w.to(device)
             opt.zero_grad(set_to_none=True)
             logit = model(batch_x)
-            loss = loss_fn(logit, batch_y)
+            loss = (loss_fn(logit, batch_y) * batch_w).mean()
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
@@ -127,16 +147,23 @@ def train(
             "auroc": summary["auroc"],
             "real_fpr": summary["real_fpr"],
             "physics_recall": summary["physics_recall"],
+            "colocated_recall": summary["colocated_recall"],
             "threshold": threshold,
         }
         history.append(row)
         print(
             f"epoch {epoch:02d}  loss {row['loss']:.4f}  AUROC {row['auroc']:.3f}  "
-            f"FPR {row['real_fpr']:.1%}  physics recall {row['physics_recall']:.1%}",
+            f"FPR {row['real_fpr']:.1%}  physics recall {row['physics_recall']:.1%}  "
+            f"colocated recall {row['colocated_recall']:.1%}",
             flush=True,
         )
-        if row["physics_recall"] > best_score:
-            best_score = row["physics_recall"]
+        # Keep the easy false tracks, then take whatever also catches the hover
+        # that sits on the transmitter.
+        score = row["physics_recall"]
+        if row["physics_recall"] >= 0.98:
+            score += row["colocated_recall"]
+        if score > best_score:
+            best_score = score
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
     model.load_state_dict(best_state)
@@ -145,15 +172,19 @@ def train(
     threshold = threshold_at_fpr(real_scores, 0.01)
     scales = feature_scales(features)
     quant = quantize_network(best_state, scales, features[: min(len(features), 2048)])
-    quant.threshold = threshold
     int8_scores = quant.score(eval_x)
     # Keep the operating point on the weights that actually ship.
-    threshold = threshold_at_fpr(int8_scores[np.isin(eval_slices, REAL_SLICES)], 0.01)
+    int8_real = int8_scores[np.isin(eval_slices, REAL_SLICES)]
+    threshold = threshold_at_fpr(int8_real, 0.01)
+    watch = threshold_at_fpr(int8_real, 0.05)
     quant.threshold = threshold
+    quant.watch = min(watch, threshold)
     float_summary = summarize(eval_y, float_scores, eval_slices, threshold_at_fpr(real_scores, 0.01))
     int8_summary = summarize(eval_y, int8_scores, eval_slices, threshold)
+    watch_summary = summarize(eval_y, int8_scores, eval_slices, quant.watch)
     print(format_summary(float_summary, "float32 held-out"))
-    print(format_summary(int8_summary, "int8 held-out (what the ESP32 runs)"))
+    print(format_summary(int8_summary, "int8 held-out, 1% cut (spoof)"))
+    print(format_summary(watch_summary, "int8 held-out, 5% cut (watch)"))
 
     torch.save({"state_dict": best_state, "hidden": model.hidden}, out / "model.pt")
     save_quant(quant, out / "quant.npz")
@@ -173,6 +204,10 @@ def train(
         "features": list(FEATURE_NAMES),
         "hidden": list(model.hidden),
         "threshold_fpr1": threshold,
+        "watch_fpr5": quant.watch,
+        "int8_colocated_recall": int8_summary["colocated_recall"],
+        "int8_watch_colocated_recall": watch_summary["colocated_recall"],
+        "int8_watch_real_fpr": watch_summary["real_fpr"],
         "int8_auroc": int8_summary["auroc"],
         "int8_physics_recall": int8_summary["physics_recall"],
         "int8_real_fpr": int8_summary["real_fpr"],
@@ -181,6 +216,7 @@ def train(
     (out / "eval.json").write_text(json.dumps({
         "float32": float_summary,
         "int8": int8_summary,
+        "int8_watch": watch_summary,
     }, indent=2) + "\n")
     with (out / "history.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(history[0].keys()))

@@ -50,6 +50,17 @@ def test_colocated_rssi_matches_a_real_aircraft():
     assert abs(near_residual - real_residual) < 0.35
 
 
+def test_scattered_nodes_disagree_when_the_claim_is_not_the_radio():
+    real = generate_tracks("real", 8, seed=14)
+    far = generate_tracks("spoof_waypoint_far", 8, seed=15)
+    near = generate_tracks("spoof_colocated", 8, seed=16)
+    real_db = np.mean([track.net_db.mean() for track in real])
+    far_db = np.mean([track.net_db.mean() for track in far])
+    near_db = np.mean([track.net_db.mean() for track in near])
+    assert far_db > real_db + 4.0
+    assert near_db < real_db + 2.0
+
+
 def test_colocated_address_is_universal_and_labeled_spoof():
     tracks = generate_tracks("spoof_colocated", 6, seed=6)
     assert all(track.addr_local == -1.0 for track in tracks)

@@ -53,10 +53,18 @@ class QuantLayer:
 
 
 class QuantModel:
-    def __init__(self, layers: list[QuantLayer], feature_scale: np.ndarray, threshold: float):
+    def __init__(self, layers: list[QuantLayer], feature_scale: np.ndarray, threshold: float, watch: float | None = None):
         self.layers = layers
         self.feature_scale = np.asarray(feature_scale, dtype=np.float32)
         self.threshold = float(threshold)
+        self.watch = float(self.threshold if watch is None else watch)
+
+    def verdict(self, probability: float) -> str:
+        if probability >= self.threshold:
+            return "spoof"
+        if probability >= self.watch:
+            return "watch"
+        return "real"
 
     def quantize_features(self, features: np.ndarray) -> np.ndarray:
         flat = np.asarray(features, dtype=np.float32).reshape(-1, WINDOW * N_FEATURES)
