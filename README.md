@@ -25,19 +25,18 @@ The network is 128 → 32 → 16 → 1. The hidden layers are int8. The ESP32-S3
 
 GPU training runs as one Slurm job on the CBU compute lab (`jduran`, files in `/lab/home/jduran`). The same laptop that runs the robot worker, LeonPC, also runs this project's worker. The lab WireGuard tunnel has to be up on Windows first. Its private key stays on that laptop. The login key is `~/.ssh/cbu_lab`, the one the portal already has on file (`SHA256:F8NzmBex7nSO59hI9UKpqfKeoXHCPy6TOlc9+xMnSqI`). The server fingerprint is `SHA256:w3zDp2wg5VOp6Y8Z/yCv6LflPLi+cnkMTJqbJfvh5A8`.
 
-On LeonPC, in the Linux shell where `~/ros2_ws` lives:
+In Windows PowerShell on that laptop, with the `cbu_lab` tunnel active:
 
-```bash
-bash lab/register-leonpc.sh
+```powershell
+git clone https://github.com/leonjorge010/ridcheck.git "$env:USERPROFILE\ridcheck"
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ridcheck\lab\register-leonpc.ps1"
+agent login
+agent worker start --name LeonPC-ridcheck --worker-dir "$env:USERPROFILE\ridcheck"
 ```
 
-That clones this repo to `~/ridcheck`, copies the lab key from the Windows profile when it is missing, and checks that `10.77.0.1:2222` answers. Then start the worker and leave it running:
+PowerShell 5.1 does not expand `~` for `git`, so the path has to be `$env:USERPROFILE\ridcheck`. The script checks that `10.77.0.1:2222` answers and installs the Cursor CLI when `agent` is missing. Leave that window open.
 
-```bash
-agent worker start --name LeonPC-ridcheck --worker-dir "$HOME/ridcheck"
-```
-
-In Cursor, choose **LeonPC-ridcheck** under My Machines before sending the next task. That agent's terminal is on LeonPC, so it can reach the lab the way the robot terminal reaches `~/ros2_ws`. The robot worker stays on `cbu-autonomous-robot`.
+In Cursor, choose **LeonPC-ridcheck** under My Machines before sending the next task. That agent's terminal is on this PC, so it can reach the lab. The robot worker stays on `cbu-autonomous-robot`. A WSL checkout uses `bash lab/register-leonpc.sh` instead, and only after WSL can open the same tunnel.
 
 From the laptop, in this repo:
 

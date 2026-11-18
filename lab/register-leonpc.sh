@@ -1,7 +1,10 @@
 #!/bin/bash
+# WSL only. Windows PowerShell 5.1 does not expand ~ for git, and the lab
+# tunnel is on Windows. From PowerShell use lab/register-leonpc.ps1.
+#
 # Register this repo with a Cursor worker on LeonPC, the same machine that
-# serves cbu-autonomous-robot. Run it there, in the Linux shell (WSL if that
-# is where ~/ros2_ws lives). Leave the robot worker running.
+# serves cbu-autonomous-robot. Run it in the Linux shell where ~/ros2_ws
+# lives. Leave the robot worker running.
 #
 #   bash lab/register-leonpc.sh
 #   bash lab/register-leonpc.sh --start
