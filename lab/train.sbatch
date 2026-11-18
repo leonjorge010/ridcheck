@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=8G
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=/lab/home/jduran/ridcheck/logs/%x-%j.out
 #SBATCH --error=/lab/home/jduran/ridcheck/logs/%x-%j.err
 
@@ -14,7 +14,7 @@ set -euo pipefail
 cd /lab/home/jduran/ridcheck
 mkdir -p logs
 
-echo "host $(hostname)  arch $(uname -m)  date $(date -Is)"
+echo "host $(hostname)  arch $(uname -m)  python $(python3 --version)  date $(date -Is)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
 cuda_ok() {
@@ -29,11 +29,11 @@ PY
 
 install_torch() {
   local index="$1"
-  if [[ "$index" == "pypi" ]]; then
-    .venv/bin/pip install -r requirements.txt
-  else
-    .venv/bin/pip install -r requirements.txt --index-url "https://download.pytorch.org/whl/${index}"
-  fi
+  # The CUDA wheel index has torch and the NVIDIA libraries. It does not have
+  # pytest, and --index-url would hide PyPI, so the install would die before
+  # torch is tested. Training does not need pytest.
+  .venv/bin/pip install --upgrade "torch>=2.2" --index-url "https://download.pytorch.org/whl/${index}"
+  .venv/bin/pip install "numpy>=1.26"
 }
 
 if [[ ! -x .venv/bin/python ]] || ! cuda_ok; then
@@ -44,14 +44,24 @@ if [[ ! -x .venv/bin/python ]] || ! cuda_ok; then
   fi
   .venv/bin/pip install -U pip
   installed=0
-  for index in cu128 cu130 cu126 pypi; do
+  for index in cu128 cu130 cu126; do
     echo "trying torch index ${index}"
-    if install_torch "$index" && cuda_ok; then
+    if ! install_torch "$index"; then
+      echo "torch from ${index} did not install" >&2
+      continue
+    fi
+    if cuda_ok; then
       installed=1
       break
     fi
-    echo "torch from ${index} does not run on this GPU" >&2
+    echo "torch from ${index} installed, but CUDA did not run" >&2
   done
+  if [[ "$installed" -ne 1 ]]; then
+    echo "trying the default PyPI torch wheel" >&2
+    if .venv/bin/pip install "torch>=2.2" "numpy>=1.26" && cuda_ok; then
+      installed=1
+    fi
+  fi
   if [[ "$installed" -ne 1 ]]; then
     echo "could not install a CUDA torch wheel for this GPU" >&2
     exit 1

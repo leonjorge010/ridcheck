@@ -46,7 +46,7 @@ From the laptop, in this repo:
 bash lab/submit.sh --wait
 ```
 
-That copies the project to `/lab/home/jduran/ridcheck`, submits `lab/train.sbatch` (one GPU, one hour), and copies `results/` and `firmware/src/model_weights.h` back when the job ends. Without `--wait` it only submits. Watch the queue with `ssh -p 2222 jduran@10.77.0.1 squeue --me`.
+That copies the project to `/lab/home/jduran/ridcheck`, submits `lab/train.sbatch` (one GPU, two hours), and copies `results/` and `firmware/src/model_weights.h` back when the job ends. Without `--wait` it only submits. Watch the queue with `ssh -p 2222 jduran@10.77.0.1 squeue --me`.
 
 The job trains with `--device cuda --scenes 8000 --epochs 20 --eval-tracks 120`. A machine that already has CUDA can run the same command directly:
 
