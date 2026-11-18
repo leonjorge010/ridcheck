@@ -1,8 +1,8 @@
 """Features a Remote ID receiver can compute for one track.
 
 The columns follow the Totem-air detection record: RSSI, aircraft fix, speed,
-heading, operator fix, and the node's own GNSS fix. The ESP32 board adds node
-speed from the LSM6DSV16X. Nothing here is a transmitted frame.
+heading, operator fix, and the receiver's own fix. Nothing here is a
+transmitted frame.
 """
 
 from __future__ import annotations

@@ -25,7 +25,7 @@ from ridcheck.features import (
     windows_from_track,
 )
 
-# Stand-in for the receiver's own fix. On the board this comes from the SAM-M10Q.
+# Stand-in for the receiver's own fix.
 DEFAULT_NODE = (34.0, -117.3)
 N_SAMPLES = 28
 

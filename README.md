@@ -6,7 +6,7 @@ The training loop matches the CBU robot: a fast simulator stands in for the slow
 
 ## What a window contains
 
-Eight location fixes, oldest first, sixteen numbers each. On the Pi those numbers come from a Totem-air detection record. On the board, node speed comes from the LSM6DSV16X and the node fix comes from the SAM-M10Q. The Wio-S3's SX1262 is the LoRa radio and is not part of the score.
+Eight location fixes, oldest first, sixteen numbers each. On the Pi those numbers come from a Totem-air detection record. The ESP32-S3 dev board does not carry its own GNSS or IMU; a host sends the finished window over USB and the board shows the verdict.
 
 | Feature | Where it comes from |
 |---|---|
@@ -17,7 +17,7 @@ Eight location fixes, oldest first, sixteen numbers each. On the Pi those number
 | `log_operator_range` | Aircraft versus the operator fix |
 | `addr_local` | Locally administered Wi-Fi address, or a BLE static-random address |
 | `cohort_log` | Other tracks within 3 dB in the same second |
-| `node_speed` | IMU speed; 0 when the node is fixed |
+| `node_speed` | How fast the receiver itself is moving; 0 when it is still |
 
 The network is 128 → 32 → 16 → 1. The hidden layers are int8. The ESP32-S3 runs that integer net.
 
@@ -87,7 +87,7 @@ A false aircraft that loiters on top of the transmitter, with a matching pilot f
 
 ## Firmware
 
-`firmware/` is a PlatformIO sketch for the XIAO ESP32-S3. On boot it checks six baked windows against the host and leaves the orange user LED off. That LED is GPIO21, and a high level turns it off. A scored window turns it solid when the track is real and blinks it twice a second when the track is false. The same line still prints `p=0.998 spoof` or `p=0.365 real`. `SELFTEST` runs the check again and leaves the LED as it was.
+`firmware/` is a PlatformIO sketch for a generic ESP32-S3 dev board, the ESP32-S3-DevKitC-1. On boot it checks six baked windows against the host and leaves the onboard RGB LED off. That LED is the addressable pixel on GPIO48 (GPIO38 on DevKitC-1 v1.0). A scored window holds it on when the track is real and blinks it twice a second when the track is false. The same line still prints `p=0.998 spoof` or `p=0.365 real`. `SELFTEST` runs the check again and leaves the LED as it was.
 
 ```bash
 cd firmware && pio run -t upload && pio device monitor

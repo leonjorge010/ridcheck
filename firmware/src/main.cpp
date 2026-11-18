@@ -1,14 +1,14 @@
-/* Serial scorer for the XIAO ESP32-S3 (SX1262, SAM-M10Q, LSM6DSV16X).
+/* Remote ID scorer for a generic ESP32-S3 dev board (ESP32-S3-DevKitC-1).
 
    One line in, one line out. The line is 128 comma-separated floats: 8 location
    fixes, oldest first, 16 features each, in the order documented in
-   model_weights.h. The sketch prints the score and shows it on the orange
-   user LED: solid for a real track, blinking for a false one, off until the
+   model_weights.h. The sketch prints the score and shows it on the onboard
+   RGB LED: solid for a real track, blinking for a false one, off until the
    first score.
 
-   The LED is GPIO21 and active low (high is dark). The SX1262 is the board's
-   LoRa radio. Remote ID is 2.4 GHz, so a later tracker should fill this window
-   from the S3's Wi-Fi and BLE radios plus the GNSS fix and the IMU speed.
+   DevKitC-1 v1.1 wires that LED to GPIO48. Older v1.0 boards use GPIO38;
+   build with -DRIDCHECK_LED_PIN=38 for those. The LED is a single-wire RGB
+   pixel, so the sketch writes it with rgbLedWrite rather than digitalWrite.
 
    SELFTEST on its own line re-runs the baked vectors and leaves the LED as it
    was.
@@ -22,15 +22,31 @@
 
 #include "ridcheck_infer.h"
 
-// XIAO ESP32-S3 orange user LED. A high level turns it off.
-static const int kUserLed = 21;
-static const uint8_t kLedOn = LOW;
-static const uint8_t kLedOff = HIGH;
+#ifndef RIDCHECK_LED_PIN
+#ifdef RGB_BUILTIN
+#define RIDCHECK_LED_PIN RGB_BUILTIN
+#else
+#define RIDCHECK_LED_PIN 48
+#endif
+#endif
+
+static const int kUserLed = RIDCHECK_LED_PIN;
+static const uint8_t kLedLevel = 48;
 static const uint32_t kBlinkMs = 250;
 
 enum Lamp : uint8_t { kLampOff, kLampSolid, kLampBlink };
 
 static Lamp lamp = kLampOff;
+static bool led_on = false;
+
+static void write_led(bool on) {
+    if (on == led_on) {
+        return;
+    }
+    led_on = on;
+    uint8_t level = on ? kLedLevel : 0;
+    rgbLedWrite(kUserLed, level, level, level);
+}
 
 static void paint_led() {
     bool on = false;
@@ -39,7 +55,7 @@ static void paint_led() {
     } else if (lamp == kLampBlink) {
         on = ((millis() / kBlinkMs) & 1u) == 0u;
     }
-    digitalWrite(kUserLed, on ? kLedOn : kLedOff);
+    write_led(on);
 }
 
 static void show_verdict(float probability) {
@@ -78,8 +94,8 @@ static void score_line(char *line) {
 }
 
 void setup() {
-    pinMode(kUserLed, OUTPUT);
-    paint_led();
+    led_on = true;
+    write_led(false);
     Serial.begin(115200);
     delay(200);
     int failed = sd_selftest();
