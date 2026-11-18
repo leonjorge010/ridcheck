@@ -87,7 +87,7 @@ A false aircraft that loiters on top of the transmitter, with a matching pilot f
 
 ## Firmware
 
-`firmware/` is a PlatformIO sketch for the ESP32-S3. On boot it checks six baked windows against the host. Then it reads one line of 128 comma-separated floats (8 fixes × 16 features, oldest first) and prints `p=0.998 spoof` or `p=0.365 real`. `SELFTEST` runs the check again.
+`firmware/` is a PlatformIO sketch for the XIAO ESP32-S3. On boot it checks six baked windows against the host and leaves the orange user LED off. That LED is GPIO21, and a high level turns it off. A scored window turns it solid when the track is real and blinks it twice a second when the track is false. The same line still prints `p=0.998 spoof` or `p=0.365 real`. `SELFTEST` runs the check again and leaves the LED as it was.
 
 ```bash
 cd firmware && pio run -t upload && pio device monitor
