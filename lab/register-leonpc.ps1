@@ -83,10 +83,18 @@ if (-not $agent) {
     exit 1
 }
 
+$agentDir = Split-Path -Parent $agent
+if ($env:Path -notlike "*$agentDir*") {
+    $env:Path = "$agentDir;$env:Path"
+}
+
 Write-Host "Repo: $Root"
-Write-Host 'Leave the cbu_lab tunnel active. In this PowerShell window:'
-Write-Host '  agent login'
-Write-Host "  agent worker start --name $Name --worker-dir $Root"
+Write-Host "Cursor CLI: $agent"
+Write-Host 'The installer always prints the Git Bash note. This window was opened before the CLI was on PATH.'
+Write-Host 'Leave the cbu_lab tunnel active and paste this in the same window:'
+Write-Host "  `$env:Path = `"$agentDir;`" + `$env:Path"
+Write-Host "  & `"$agent`" login"
+Write-Host "  & `"$agent`" worker start --name $Name --worker-dir `"$Root`""
 Write-Host 'Then, in Cursor, choose LeonPC-ridcheck under My Machines.'
 
 if ($Start) {

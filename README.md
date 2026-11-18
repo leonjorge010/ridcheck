@@ -30,11 +30,12 @@ In Windows PowerShell on that laptop, with the `cbu_lab` tunnel active:
 ```powershell
 git clone https://github.com/leonjorge010/ridcheck.git "$env:USERPROFILE\ridcheck"
 powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\ridcheck\lab\register-leonpc.ps1"
-agent login
-agent worker start --name LeonPC-ridcheck --worker-dir "$env:USERPROFILE\ridcheck"
+$env:Path = "$env:LOCALAPPDATA\cursor-agent;" + $env:Path
+& "$env:LOCALAPPDATA\cursor-agent\agent.cmd" login
+& "$env:LOCALAPPDATA\cursor-agent\agent.cmd" worker start --name LeonPC-ridcheck --worker-dir "$env:USERPROFILE\ridcheck"
 ```
 
-PowerShell 5.1 does not expand `~` for `git`, so the path has to be `$env:USERPROFILE\ridcheck`. The script checks that `10.77.0.1:2222` answers and installs the Cursor CLI when `agent` is missing. Leave that window open.
+PowerShell 5.1 does not expand `~` for `git`, so the path has to be `$env:USERPROFILE\ridcheck`. The script checks that `10.77.0.1:2222` answers and installs the Cursor CLI when `agent` is missing. The installer adds `%LOCALAPPDATA%\cursor-agent` to the user PATH, which an already-open window does not see until the `$env:Path` line above. Leave that window open.
 
 In Cursor, choose **LeonPC-ridcheck** under My Machines before sending the next task. That agent's terminal is on this PC, so it can reach the lab. The robot worker stays on `cbu-autonomous-robot`. A WSL checkout uses `bash lab/register-leonpc.sh` instead, and only after WSL can open the same tunnel.
 
